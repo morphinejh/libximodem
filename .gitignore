@@ -1,0 +1,13 @@
+# The repo tracks only the library sources + build system:
+#   compat/  include/  src/  external/  patches/  scripts/
+#   CMakeLists.txt  Makefile  *.md  LICENSE
+#
+# Everything below stays local (dev/test only).
+
+# Test harnesses
+/tools/
+PROGRESS.md
+
+# Build output and generated sources
+/build/
+/src/generated/

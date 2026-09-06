@@ -1,0 +1,63 @@
+# zimodem.ino: ZIMODEM_HOST build branch (feature trim, ZMode virtual bodies, xi_prototypes.h include, host debug-console line)
+# ximodem patch against Zimodem @ a24225cc1b6c219e6c0764a4e6b1a388356a1dd5
+--- a/zimodem.ino	2026-09-02 18:08:08.774382287 -0400
++++ b/zimodem.ino	2026-09-02 20:10:50.570215738 -0400
+@@ -31,6 +31,18 @@
+ #define INCLUDE_OTH_UPDATES true // comment out if you make incompatible firmware
+ #define INCLUDE_SLIP true
+ #define INCLUDE_PPP true
++
++// --- ximodem host build: trim features not in the v1 scope (see PATCHES.md) ---
++#ifdef ZIMODEM_HOST
++# undef  INCLUDE_SLIP           // needs a host lwIP netif
++# undef  INCLUDE_PPP            // needs a host lwIP netif
++# undef  INCLUDE_OTH_UPDATES    // meaningless for a library
++// INCLUDE_PING stays on: proto_ping.ino's body is skipped for ZIMODEM_HOST and
++// compat/ping.cpp provides ping() over an unprivileged ICMP datagram socket.
++# ifdef XIMODEM_NO_SSH
++#  undef INCLUDE_SSH            // SSH on by default: links host libssh2
++# endif
++#endif
+ //#define SUPPORT_LED_PINS true // enable if you have the spare gpio pins and leds
+ //#define INCLUDE_CMDRX16 true // enable this if you are David or Kevin
+ //#define USE_DEVUPDATER true // only enable this if your name is Bo
+@@ -198,8 +210,14 @@
+ class ZMode
+ {
+   public:
++    virtual ~ZMode() {}
++#ifdef ZIMODEM_HOST
++    virtual void serialIncoming() {}
++    virtual void loop() {}
++#else
+     virtual void serialIncoming();
+     virtual void loop();
++#endif
+ };
+ 
+ #include "pet2asc.h"
+@@ -241,6 +259,12 @@
+ #  include "zircmode.h"
+ #endif
+ 
++#ifdef ZIMODEM_HOST
++// ximodem: Arduino auto-generates free-function prototypes; we emit an
++// equivalent header here, after every firmware type is defined.
++#  include "xi_prototypes.h"
++#endif
++
+ static WiFiClientNode *conns = null;
+ static WiFiServerNode *servs = null;
+ static PhoneBookEntry *phonebook = null;
+@@ -602,7 +626,11 @@
+   OPB_stat=digitalRead(DEFAULT_PIN_OPB);
+ #endif
+ 
++#ifdef ZIMODEM_HOST
++  debugPrintf("ximodem %s (Zimodem %s host build) starting initialization\r\n",XIMODEM_VERSION,ZIMODEM_VERSION);
++#else
+   debugPrintf("Zimodem %s firmware starting initialization\r\n",ZIMODEM_VERSION);
++#endif
+   initSDShell();
+   currMode = &commandMode;
+   if(!SPIFFS.begin())

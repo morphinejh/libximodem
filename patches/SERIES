@@ -1,0 +1,6 @@
+0001-zimodem-ino-host-build-branch.patch
+0002-pet2asc-h-include-guard.patch
+0003-proto_ping-ino-host-skip.patch
+0004-zcommand-ino-host-identity.patch
+0005-wifisshclient-h-system-libssh2.patch
+0006-wifisshclient-ino-host-port.patch

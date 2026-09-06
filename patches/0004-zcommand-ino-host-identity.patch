@@ -1,0 +1,113 @@
+# zcommand.ino: ZIMODEM_HOST -- host banner + fixed read-only network identity (ximodem-host); wifiSSI kept empty so connectWifi is never entered and AT&W cannot wedge the next boot
+# ximodem patch against Zimodem @ a24225cc1b6c219e6c0764a4e6b1a388356a1dd5
+--- a/zcommand.ino	2026-09-02 18:08:08.783431854 -0400
++++ b/zcommand.ino	2026-09-02 20:11:46.287014762 -0400
+@@ -625,6 +625,14 @@
+   changeSerialConfig(serialConfig);
+   wifiSSI=argv[CFG_WIFISSI];
+   wifiPW=argv[CFG_WIFIPW];
++#ifdef ZIMODEM_HOST
++  // The host adapter *is* the connection and the user cannot change it. Keep
++  // wifiSSI empty so connectWifi() is never entered (from here, checkReconnect,
++  // or a stale/persisted config), and so AT&W can't save a name that wedges the
++  // next boot. ATI / ATI3 / the banner report a fixed "ximodem-host" directly.
++  wifiSSI="";
++  wifiPW="";
++#endif
+   hostname = argv[CFG_HOSTNAME];
+   setNewStaticIPs(
+       ConnSettings::parseIP(argv[CFG_STATIC_IP].c_str()),
+@@ -934,7 +942,11 @@
+   }
+   case 3:
+   {
++#ifdef ZIMODEM_HOST
++    serial.prints(WiFi.SSID().c_str());   // fixed, read-only identity
++#else
+     serial.prints(wifiSSI.c_str());
++#endif
+     serial.prints(EOLN);
+     break;
+   }
+@@ -964,7 +976,11 @@
+   }
+   case 9:
+   {
++#ifdef ZIMODEM_HOST
++    serial.prints(WiFi.SSID().c_str());
++#else
+     serial.prints(wifiSSI.c_str());
++#endif
+     serial.prints(EOLN);
+     if(staticIP != null)
+     {
+@@ -1638,6 +1654,19 @@
+ ZResult ZCommand::doWiFiCommand(int vval, uint8_t *vbuf, int vlen, bool isNumber, const char *dmodifiers)
+ {
+   bool doPETSCII = (strchr(dmodifiers,'p')!=null) || (strchr(dmodifiers,'P')!=null);
++#ifdef ZIMODEM_HOST
++  // The host adapter is the connection; joining a named SSID is meaningless.
++  // A scan (AT+CONFIG with no SSID) reports the fixed identity; setting one
++  // (AT+CONFIG"ssid","pw") is accepted and ignored so scripts don't see ERROR.
++  if(vlen==0)
++  {
++    serial.prints((WiFi.SSID() + " (0)").c_str());
++    serial.prints(EOLN);
++    return ZOK;
++  }
++  if(!(isNumber && (vval>=0)))
++    return ZOK;
++#endif
+   if((vlen==0)||((isNumber && (vval>=0))))
+   {
+     int n = WiFi.scanNetworks();
+@@ -3580,6 +3609,17 @@
+   SPIFFS.info(info);
+   int totalSPIFFSSize = info.totalBytes;
+ #endif
++  char s[100];
++#if defined(ZIMODEM_HOST)
++  serial.prints("Zimodem v");
++  HWSerial.setTimeout(60000);
++  serial.prints(ZIMODEM_VERSION);
++  serial.prints(" (ximodem host build)");
++  serial.prints(commandMode.EOLN);
++  sprintf(s,"sdk=ximodem-%s  cpu=host  heap=%dk", XIMODEM_VERSION, (int)(ESP.getFreeHeap()/1024));
++  serial.prints(s);
++  serial.prints(commandMode.EOLN);
++#else
+   serial.prints("Zimodem ");
+ #ifdef ZIMODEM_ESP32
+   serial.prints("ESP32 ");
+@@ -3593,7 +3633,6 @@
+   //serial.prints(compile_date);
+   //serial.prints(")");
+   serial.prints(commandMode.EOLN);
+-  char s[100];
+ #ifdef ZIMODEM_ESP32
+   sprintf(s,"sdk=%s chipid=%d cpu@%d",ESP.getSdkVersion(),ESP.getChipRevision(),ESP.getCpuFreqMHz());
+ #else
+@@ -3606,9 +3645,14 @@
+ #else
+   sprintf(s,"tot=%dk heap=%dk fsize=%dk",(ESP.getFlashChipRealSize()/1024),(ESP.getSketchSize()/1024),totalSPIFFSSize/1024);
+ #endif
+-  
++
+   serial.prints(s);
+   serial.prints(commandMode.EOLN);
++#endif
++#ifdef ZIMODEM_HOST
++  // Fixed, read-only identity -- the host adapter is the connection.
++  serial.prints(("CONNECTED TO " + WiFi.SSID() + " (" + WiFi.localIP().toString().c_str() + ")").c_str());
++#else
+   if(wifiSSI.length()>0)
+   {
+     if(WiFi.status() == WL_CONNECTED)
+@@ -3618,6 +3662,7 @@
+   }
+   else
+     serial.prints("INITIALIZED");
++#endif
+   serial.prints(commandMode.EOLN);
+   serial.prints("READY.");
+   serial.prints(commandMode.EOLN);

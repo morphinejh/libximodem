@@ -1,0 +1,19 @@
+# pet2asc.h: add ZHEADER_PET2ASC_H include guard (file is included from more than one TU path in the host build)
+# ximodem patch against Zimodem @ a24225cc1b6c219e6c0764a4e6b1a388356a1dd5
+--- a/pet2asc.h	2026-09-02 18:06:29.670744328 -0400
++++ b/pet2asc.h	2026-09-02 18:06:29.680324239 -0400
+@@ -13,6 +13,8 @@
+    See the License for the specific language governing permissions and
+    limitations under the License.
+ */
++#ifndef ZHEADER_PET2ASC_H
++#define ZHEADER_PET2ASC_H
+ #ifdef ZIMODEM_ESP32
+ # include <WiFi.h>
+ # define ENC_TYPE_NONE WIFI_AUTH_OPEN
+@@ -84,3 +86,5 @@
+   return 0;
+ }
+ 
++#endif // ZHEADER_PET2ASC_H
++

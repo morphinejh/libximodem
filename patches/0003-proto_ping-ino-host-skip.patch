@@ -1,0 +1,10 @@
+# proto_ping.ino: skip the ESP/lwIP ping() body for ZIMODEM_HOST (compat/ping.cpp provides it)
+# ximodem patch against Zimodem @ a24225cc1b6c219e6c0764a4e6b1a388356a1dd5
+--- a/proto_ping.ino	2026-09-02 18:06:29.669307519 -0400
++++ b/proto_ping.ino	2026-09-02 18:06:29.679002930 -0400
+@@ -1,4 +1,4 @@
+-#if INCLUDE_PING
++#if INCLUDE_PING && !defined(ZIMODEM_HOST)   /* ximodem: ping() is in compat/ping.cpp */
+ /*
+    Copyright 2023-2026 Bo Zimmerman
+ 

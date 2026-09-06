@@ -1,0 +1,21 @@
+# wifisshclient.h: XIMODEM_SYSTEM_LIBSSH2 -> include the platform <libssh2.h> so libssh2_socket_t matches the linked lib
+# ximodem patch against Zimodem @ a24225cc1b6c219e6c0764a4e6b1a388356a1dd5
+--- a/wifisshclient.h	2026-09-02 18:06:29.670428285 -0400
++++ b/wifisshclient.h	2026-09-02 18:06:29.680005351 -0400
+@@ -17,8 +17,14 @@
+ #include "Arduino.h"
+ #include "IPAddress.h"
+ #include <WiFi.h>
+-#include "src/libssh2/libssh2_config.h"
+-#include "src/libssh2/libssh2.h"
++#if defined(XIMODEM_SYSTEM_LIBSSH2)
++// ximodem: use the platform's installed libssh2 (MSYS2 / a -dev package) so
++// libssh2_socket_t etc. match the linked library's ABI.
++# include <libssh2.h>
++#else
++# include "src/libssh2/libssh2_config.h"
++# include "src/libssh2/libssh2.h"
++#endif
+ 
+ class WiFiSSHClient : public WiFiClient
+ {

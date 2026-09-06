@@ -1,0 +1,31 @@
+# wifisshclient.ino: close()->xi_closesocket(); add missing 'return true' (upstream UB); cast sock to int for fd()
+# ximodem patch against Zimodem @ a24225cc1b6c219e6c0764a4e6b1a388356a1dd5
+--- a/wifisshclient.ino	2026-09-02 18:06:29.672804505 -0400
++++ b/wifisshclient.ino	2026-09-02 18:06:29.682364177 -0400
+@@ -40,7 +40,7 @@
+       session = null;
+   }
+   if(sock) {
+-    close(sock);
++    xi_closesocket(sock);   // ximodem: close()->closesocket() on Windows
+     sock = null;
+   }
+ }
+@@ -108,6 +108,8 @@
+   if((err > 0) && (err != LIBSSH2_ERROR_EAGAIN)) {
+     ibufSz += err;
+   }
++  return true;   // ximodem: upstream falls off the end here (UB); on x86-64 the
++                 // garbage return read as false and the caller reported failure.
+ }
+ int WiFiSSHClient::connect(IPAddress ip, uint16_t port, int32_t timeout_ms)
+ {
+@@ -311,7 +313,7 @@
+ 
+ int WiFiSSHClient::fd() const
+ {
+-  return sock;
++  return (int)sock;   // ximodem: libssh2_socket_t may be SOCKET (64-bit) on Windows
+ }
+ 
+ #endif

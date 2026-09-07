@@ -85,8 +85,13 @@ def extract_protos(path):
         if m:
             ret, name, args, brace = m.group(1), m.group(2), m.group(3), m.group(4)
             ret_first = ret.split()[0] if ret.split() else ""
+            # "::" in name or ret == an out-of-line member definition (e.g.
+            # "void WiFiClientNode:: setNoDelay(bool)" -- the qualifier lands in
+            # the return-type group). Members are declared in their class; a
+            # file-scope forward declaration of one is ill-formed (Clang errors,
+            # GCC only warns under -fpermissive), so never emit a prototype.
             if (name not in KEYWORDS and ret_first not in KEYWORDS
-                    and "::" not in name and "=" not in args
+                    and "::" not in name and "::" not in ret and "=" not in args
                     and not ret.strip().startswith("return")):
                 decl = f"{ret.strip()} {name}({args.strip()});"
                 # collapse whitespace

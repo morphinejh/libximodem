@@ -14,9 +14,10 @@ Upstream pin: **`external/COMMIT`** (currently
 carrying `INCLUDE_CMDRX16`; this is the commit the port was verified against.
 Bump to the 4.0.3 tag once it exists (see "Updating upstream" below).
 
-All firmware behaviour changes are guarded by `ZIMODEM_HOST` (defined in
+All firmware *behaviour* changes are guarded by `ZIMODEM_HOST` (defined in
 `src/xi_prelude.h`, not patched in) so the patched tree is still a valid ESP32
-build.
+build. Patches 0007-0008 are unguarded but behaviour-neutral on every toolchain
+(a whitespace fix and an explicit cast that C++ would otherwise make implicitly).
 
 ## The patches
 
@@ -33,6 +34,8 @@ build.
 | 0005 | `wifisshclient.h` | `#include "src/libssh2/..."` becomes `#if defined(XIMODEM_SYSTEM_LIBSSH2)` -> `<libssh2.h>` else vendored | With a real libssh2 (MSYS2 UCRT64, a Linux `-dev`), use *its* header so `libssh2_socket_t` (= `SOCKET` on Windows) matches the linked lib's ABI. CMake sets the define. |
 | 0006 | `wifisshclient.ino` | `WiFiSSHClient::connect(IPAddress,uint16_t)` -- add missing `return true;` | Upstream falls off the end (UB). On ESP32 the garbage return was truthy; on x86-64 it read `false`, so `ATDS"user:pass@host"` reported failure after a successful handshake+auth+shell. |
 | 0006 | `wifisshclient.ino` | `close(sock)` -> `xi_closesocket(sock)`; `fd()` returns `(int)sock` | Windows: `closesocket()`, and `libssh2_socket_t` is 64-bit `SOCKET`. `xi_closesocket` comes from `compat/xi_platform.h`. |
+| 0007 | `wificlientnode.ino` | `void WiFiClientNode:: setNoDelay` -> `WiFiClientNode::setNoDelay` (drop the stray space) | The space made `scripts/gen_unity.py` classify the out-of-line member definition as a free function and emit a file-scope prototype. Clang rejects that declaration ("out-of-line declaration of a member must be a definition"); GCC only warns under `-fpermissive`. The generator now also drops any `::`-qualified match -- this removes the trigger at the source. |
+| 0008 | `proto_ftp.ino` | `char *end = strrchr(remotepath, '/')` -> `(char *)strrchr(...)` | `FTPHost::fixPath` takes `const char *remotepath`; in C++ `strrchr(const char*)` returns `const char*`. GCC drops the const with a warning under `-fpermissive`, Clang errors. Explicit cast matches the existing `strchr((char *)vbuf, ...)` style in this file; no behaviour change. |
 
 Deliberately **not** carried from the old hand-patched tree: a
 `zcommand.ino` change from `checkPhonebookEntry(colon+1)` to

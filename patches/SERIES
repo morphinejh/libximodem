@@ -4,3 +4,5 @@
 0004-zcommand-ino-host-identity.patch
 0005-wifisshclient-h-system-libssh2.patch
 0006-wifisshclient-ino-host-port.patch
+0007-wificlientnode-ino-scope-space.patch
+0008-proto_ftp-ino-strrchr-const.patch

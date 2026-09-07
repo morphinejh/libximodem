@@ -1,0 +1,20 @@
+# wificlientnode.ino: "WiFiClientNode:: setNoDelay" -> "WiFiClientNode::setNoDelay"
+# The stray space after "::" makes scripts/gen_unity.py's signature regex split
+# the out-of-line member definition into ret="void WiFiClientNode:: " /
+# name="setNoDelay" and emit a file-scope prototype for it. That declaration is
+# ill-formed C++ (Clang: "out-of-line declaration of a member must be a
+# definition"; GCC only warns under -fpermissive). The generator now also drops
+# any "::"-qualified match; this removes the trigger at the source too. Harmless
+# on the ESP32 build.
+# ximodem patch against Zimodem @ a24225cc1b6c219e6c0764a4e6b1a388356a1dd5
+--- a/wificlientnode.ino	2026-09-02 18:06:29.669307519 -0400
++++ b/wificlientnode.ino	2026-09-02 18:06:29.679002930 -0400
+@@ -92,7 +92,7 @@
+   constructNode(hostIp, newport, 0, 0, flagsBitmap, 0);
+ }
+
+-void WiFiClientNode:: setNoDelay(bool tf)
++void WiFiClientNode::setNoDelay(bool tf)
+ {
+   if(clientPtr != 0)
+     clientPtr->setNoDelay(tf);

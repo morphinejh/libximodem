@@ -14,6 +14,14 @@ endif()
 # built standalone this is the whole story; when it is add_subdirectory'd into a
 # stricter parent (e.g. the x16 emulator) these flags come last and win.
 #
+# NOT here: -fpermissive. It is GCC-only (Clang ignores it) and would demote real
+# C++ conformance errors -- ill-formed declarations, const-correctness -- to
+# warnings that -w then hides, so a Linux/MSYS build stays green while an Apple
+# Clang build fails. Without it GCC enforces roughly what Clang does, and the
+# pinned tree compiles clean. If an upstream bump reintroduces non-conformant
+# code, fix it with a patch (Clang needs one regardless) rather than re-adding
+# this flag. -w and -Wno-error still absorb the Arduino warning noise.
+#
 # -funsigned-char: the vendored Zimodem firmware targets the ESP32, where `char`
 # is unsigned. It treats bare `char` as a raw byte throughout (Telnet IAC / PETSCII
 # translation: `if(*c == 255)`, `*c == TELNET_IAC`, petToAsc high bytes, ...). On
@@ -22,7 +30,7 @@ endif()
 # escapes are never de-doubled, corrupting binary (YMODEM) downloads. Matching the
 # ESP32's char signedness restores the semantics the firmware was written against.
 set(XIMODEM_RELAX_FLAGS -g -O1 -fno-omit-frame-pointer -w -Wno-error
-                        -fpermissive -Wno-write-strings -Wno-narrowing
+                        -Wno-write-strings -Wno-narrowing
                         -funsigned-char)
 add_compile_options(${XIMODEM_RELAX_FLAGS})
 

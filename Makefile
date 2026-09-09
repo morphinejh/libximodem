@@ -53,7 +53,9 @@ test: release
 	 ./ximodem-smoke; \
 	 ./ximodem-baudtest; \
 	 ./ximodem-nettest; \
+	 ./ximodem-bannertest; \
 	 if [ -x ./ximodem-dialtest ]; then ./ximodem-dialtest; fi; \
+	 if [ -x ./ximodem-pbdialtest ]; then ./ximodem-pbdialtest; fi; \
 	 if [ -x ./ximodem-sigtest ];  then ./ximodem-sigtest;  fi; \
 	 if [ -x ./ximodem-flowtest ]; then ./ximodem-flowtest $(FLOWTEST_BYTES); fi; \
 	 if [ -x ./ximodem-ratetest ]; then ./ximodem-ratetest; fi

@@ -1,0 +1,40 @@
+# doDialStreamCommand() phonebook shortcut + savePhonebook().
+#
+# 1. zcommand.ino: the ATD<n> shortcut copies the stored address into a buffer
+#    and releases it with free(), but allocates it with `new uint8_t[]`.  Mixing
+#    new[] and free() is undefined behaviour -- on Windows it corrupts the CRT
+#    heap and crashes the emulator on ATD<n> (manual ATDT"host:port" never hits
+#    this path).  Zimodem allocates every other byte buffer with malloc (see
+#    setCharArray, and the malloc sites in zprint / wifisshclient / proto_zmodem),
+#    so match that: malloc() + the existing free().  No new[]/delete[].
+#
+# 2. phonebook.ino savePhonebook(): the format is "%ul" (unsigned int then a
+#    literal 'l'), not "%lu".  It writes every number as e.g. "5l,..." into
+#    /zphonebook.txt; benign only because loadPhonebook() parses it with atol().
+#    Behaviour-neutral on the ESP32.
+#
+# ximodem patch against Zimodem @ a24225cc1b6c219e6c0764a4e6b1a388356a1dd5
+--- a/zcommand.ino	2026-09-09 12:00:00.000000000 -0400
++++ b/zcommand.ino	2026-09-09 12:00:00.000000000 -0400
+@@ -1874,9 +1874,9 @@
+     if(phb != null)
+     {
+         int addrLen=strlen(phb->address);
+-        uint8_t *vbuf = new uint8_t[addrLen+1];
++        uint8_t *vbuf = (uint8_t *)malloc(addrLen+1);   /* ximodem: paired with free(vbuf) below */
+         strcpy((char *)vbuf,phb->address);
+         ZResult res = doDialStreamCommand(0,vbuf,addrLen,false,phb->modifiers);
+         free(vbuf);
+         return res;
+     }
+--- a/phonebook.ino	2026-09-09 12:00:00.000000000 -0400
++++ b/phonebook.ino	2026-09-09 12:00:00.000000000 -0400
+@@ -151,7 +151,7 @@
+   PhoneBookEntry *phb=phonebook;
+   while(phb != null)
+   {
+-    f.printf("%ul,%s,%s,%s\n",phb->number,phb->address,phb->modifiers,phb->notes);
++    f.printf("%lu,%s,%s,%s\n",phb->number,phb->address,phb->modifiers,phb->notes);
+     phb = phb->next;
+     ct++;
+   }

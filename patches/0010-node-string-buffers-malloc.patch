@@ -1,0 +1,61 @@
+# Node C-string buffers: allocate with malloc(), to match how they're freed.
+#
+# Zimodem allocates C-string / byte buffers with malloc and releases them with
+# free() (setCharArray/freeCharArray in pet2asc.h, and ~15 explicit sites across
+# zcommand / zprint / wifisshclient / proto_zmodem).  Two node types slipped and
+# used `new char[]` for buffers that are still handed back the malloc way:
+#
+#   * wificlientnode.ino  WiFiClientNode::host  -- both constructors do
+#     `host = new char[...]`, ~WiFiClientNode() does `delete host` (scalar,
+#     mismatched).  Switch the allocs to malloc() and the release to free().
+#   * phonebook.ino  PhoneBookEntry::{address,modifiers,notes} -- `new char[]`
+#     in the ctor, ~PhoneBookEntry() frees them via freeCharArray() -> free().
+#     Switch the allocs to malloc().
+#
+# This keeps the patched tree free of new[]/delete[] entirely (pristine Zimodem
+# has none), every alloc/free pair consistent.  Behaviour-neutral on the ESP32.
+#
+# ximodem patch against Zimodem @ a24225cc1b6c219e6c0764a4e6b1a388356a1dd5
+--- a/wificlientnode.ino	2026-09-09 12:00:00.000000000 -0400
++++ b/wificlientnode.ino	2026-09-09 12:00:00.000000000 -0400
+@@ -44,7 +44,7 @@
+ {
+   constructNode();
+   port=newport;
+-  host=new char[strlen(hostIp)+1];
++  host=(char *)malloc(strlen(hostIp)+1);
+   strcpy(host,hostIp);
+   this->flagsBitmap = flagsBitmap;
+   answered=(ringDelay == 0);
+@@ -109,7 +109,7 @@
+   port=newClient.localPort();
+   String remoteIPStr = newClient.remoteIP().toString();
+   const char *remoteIP=remoteIPStr.c_str();
+-  host=new char[remoteIPStr.length()+1];
++  host=(char *)malloc(remoteIPStr.length()+1);
+   strcpy(host,remoteIP);
+   client = newClient;
+   answered=(ringDelay == 0);
+@@ -133,7 +133,7 @@
+     if(clientPtr != null)
+       clientPtr->stop();
+     else
+       client.stop();
+-    delete host;
++    free(host);   /* ximodem: host is malloc()'d (see both constructors) */
+     host=null;
+   }
+   if(clientPtr != null)
+--- a/phonebook.ino	2026-09-09 12:00:00.000000000 -0400
++++ b/phonebook.ino	2026-09-09 12:00:00.000000000 -0400
+@@ -19,7 +19,7 @@
+   number=phnum;
+-  address = new char[strlen(addr)+1];
++  address = (char *)malloc(strlen(addr)+1);
+   strcpy((char *)address,addr);
+-  modifiers = new char[strlen(mod)+1];
++  modifiers = (char *)malloc(strlen(mod)+1);
+   strcpy((char *)modifiers,mod);
+-  notes = new char[strlen(note)+1];
++  notes = (char *)malloc(strlen(note)+1);
+   strcpy((char *)notes,note);

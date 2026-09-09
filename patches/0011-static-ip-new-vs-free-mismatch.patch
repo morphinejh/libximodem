@@ -1,0 +1,70 @@
+# Static-IP config: release IPAddress objects with delete, not free().
+#
+# ConnSettings::parseIP() returns `new IPAddress(...)` and the config menu also
+# does bare `new IPAddress()`; those pointers are then handed to free() in four
+# spots. Same undefined-behaviour class as 0009/0010 (allocated one way, released
+# another). IPAddress is a trivially-destructible POD, so the ESP32 and
+# glibc/libc++ let it slide; the Windows CRT does not -- operator new is not
+# guaranteed to be malloc, so free() on that pointer corrupts the heap.
+#
+# Live on the X16 (INCLUDE_CMDRX16) build: fires whenever a static IP is
+# persisted and loadConfig() runs again (boot, AT&W + reload), when a static IP
+# is entered in the config menu, and on the AT+W... static-IP rollback paths.
+#
+# Switching free() -> delete is also correct on the ESP32 (the objects are
+# new'd there too); no behaviour change.
+#
+# ximodem patch against Zimodem @ a24225cc1b6c219e6c0764a4e6b1a388356a1dd5
+--- a/zimodem.ino	2026-09-08 12:00:00.000000000 -0400
++++ b/zimodem.ino	2026-09-08 12:00:00.000000000 -0400
+@@ -382,15 +382,15 @@
+ static void setNewStaticIPs(IPAddress *ip, IPAddress *dns, IPAddress *gateWay, IPAddress *subNet)
+ {
+   if(staticIP != null)
+-    free(staticIP);
++    delete staticIP;   /* ximodem: new IPAddress() -> delete, not free() */
+   staticIP = ip;
+   if(staticDNS != null)
+-    free(staticDNS);
++    delete staticDNS;
+   staticDNS = dns;
+   if(staticGW != null)
+-    free(staticGW);
++    delete staticGW;
+   staticGW = gateWay;
+   if(staticSN != null)
+-    free(staticSN);
++    delete staticSN;
+   staticSN = subNet;
+ }
+--- a/zconfigmode.ino	2026-09-08 12:00:00.000000000 -0400
++++ b/zconfigmode.ino	2026-09-08 12:00:00.000000000 -0400
+@@ -395,7 +395,7 @@
+           case 'g': lastGW = *newaddr; break;
+           case 's': lastSN = *newaddr; break;
+           }
+-          free(newaddr);
++          delete newaddr;   /* ximodem: parseIP() returns new IPAddress() */
+         }
+       }
+       showMenu=true;
+--- a/zcommand.ino	2026-09-08 12:00:00.000000000 -0400
++++ b/zcommand.ino	2026-09-08 12:00:00.000000000 -0400
+@@ -1743,7 +1743,7 @@
+             {
+               while(--i>=0)
+               {
+-                free(ip[i]);
++                delete ip[i];   /* ximodem: parseIP() returns new IPAddress() */
+                 ip[i]=null;
+               }
+               break;
+@@ -1775,7 +1775,7 @@
+       for(int ii=0;ii<4;ii++)
+       {
+         if(ip[ii]!=null)
+-          free(ip[ii]);
++          delete ip[ii];   /* ximodem: parseIP() returns new IPAddress() */
+       }
+       return ZERROR;
+     }

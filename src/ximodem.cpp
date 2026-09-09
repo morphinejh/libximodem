@@ -108,6 +108,7 @@ struct Ring {
     if (size() == 0) return -1;
     return buf[tail.load()];
   }
+  void reset() { tail.store(head.load()); }
 };
 
 struct ximodem_s {
@@ -278,13 +279,25 @@ static bool xi_dte_flow_open(ximodem_s *m) {
   return ximodem_get_signal(m, XIMODEM_SIG_RTS) != 0;   // asserted?
 }
 
+// How much modem->DTE output to hold while the DTE cannot yet frame it (the X16
+// card divisor is not programmed).  A real modem's UART, with hw flow control
+// on, keeps unsent bytes in its ~256 B TX ring until the DTE asserts CTS and
+// starts clocking -- which is why the boot banner survives to the first terminal
+// open.  Mirror that with a bounded hold; ximodem_read()/_available() gate on
+// the same baud match so the embedder doesn't drain it early.
+static const int XI_PRECONFIG_HOLD = 1024;
+
 extern "C" int xi_dte_write(const uint8_t *buf, int len) {
   if (!g_inst || len <= 0) return 0;
   ximodem_s *m = g_inst;
   // Baud mismatch: the modem still clocks bits out, the DTE just can't decode
-  // them. Accept-and-drop so the firmware's TX path doesn't stall on a wire
-  // nobody is reading.
-  if (!xi_baud_match(m)) return len;
+  // them. Hold a bounded amount (see above) so the boot banner is delivered
+  // once the card is configured; drop the overflow, as a real TX ring would.
+  if (!xi_baud_match(m)) {
+    int room = XI_PRECONFIG_HOLD - m->toDTE.size();
+    if (room > 0) m->toDTE.push(buf, len < room ? len : room);
+    return len;
+  }
   // While the DTE has RTS low under hw flow control, hold here -- the ESP32 UART
   // would not clock the byte out either. A multi-threaded embedder (the
   // emulator) keeps draining toDTE on its other thread and re-raises RTS; the
@@ -437,6 +450,7 @@ int ximodem_write(ximodem_t *m, const uint8_t *buf, int len) {
 }
 int ximodem_read(ximodem_t *m, uint8_t *buf, int len) {
   if (!m) return 0;
+  if (!xi_baud_match(m)) return 0;         // DTE can't frame bytes at a rate it isn't set to
   int want = xi_rx_budget(m, len);
   if (want <= 0) return 0;
   int n = m->toDTE.pop(buf, want);
@@ -445,6 +459,7 @@ int ximodem_read(ximodem_t *m, uint8_t *buf, int len) {
 }
 int ximodem_read_available(ximodem_t *m) {
   if (!m) return 0;
+  if (!xi_baud_match(m)) return 0;
   int have = m->toDTE.size();
   return xi_rx_budget(m, have);            // advertise only what the line rate allows
 }
@@ -456,7 +471,15 @@ int ximodem_write_space(ximodem_t *m) {
 // The rate the emulator's TL16C2550 is programmed to. 0 => card not configured.
 void ximodem_set_baud(ximodem_t *m, uint32_t baud) {
   if (!m) return;
-  m->dteBaud.store(baud);
+  uint32_t prev = m->dteBaud.exchange(baud);
+  // Card divisor cleared (a machine reset -- Ctrl-R -- deconfigures the TL16C2550,
+  // which also resets its RX FIFO). Drop anything still queued for the DTE so the
+  // reset genuinely flushes the receive path: the firmware itself is not
+  // restarted, so its boot banner must not reappear, and mid-stream bytes from a
+  // torn-down session must not resurface. Safe here: openDevice() (the only
+  // in-emulator caller) runs with both worker threads parked.
+  if (baud == 0 && prev != 0)
+    m->toDTE.reset();
   xi_baud_note(m);
 }
 // Reports the *modem's* serial rate (what ATI / CONNECT show), not the DTE's.

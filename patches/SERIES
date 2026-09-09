@@ -6,3 +6,6 @@
 0006-wifisshclient-ino-host-port.patch
 0007-wificlientnode-ino-scope-space.patch
 0008-proto_ftp-ino-strrchr-const.patch
+0009-phonebook-dial-heap-and-format.patch
+0010-node-string-buffers-malloc.patch
+0011-static-ip-new-vs-free-mismatch.patch

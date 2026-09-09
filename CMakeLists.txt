@@ -196,10 +196,10 @@ endif()
 # PTY -- all POSIX-only in the harness (the library under test stays portable).
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR
    AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tools/smoke.c)
-  set(_xi_tools smoke:smoke baudtest:baudtest nettest:nettest)
+  set(_xi_tools smoke:smoke baudtest:baudtest nettest:nettest bannertest:bannertest)
   if(NOT WIN32)
-    list(APPEND _xi_tools dialtest:dialtest pty:pty_bridge sigtest:sigtest
-                         flowtest:flowtest ratetest:ratetest)
+    list(APPEND _xi_tools dialtest:dialtest pbdialtest:pbdialtest pty:pty_bridge
+                         sigtest:sigtest flowtest:flowtest ratetest:ratetest)
   endif()
   foreach(tool ${_xi_tools})
     string(REPLACE ":" ";" _t ${tool})

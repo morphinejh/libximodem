@@ -16,8 +16,15 @@ Bump to the 4.0.3 tag once it exists (see "Updating upstream" below).
 
 All firmware *behaviour* changes are guarded by `ZIMODEM_HOST` (defined in
 `src/xi_prelude.h`, not patched in) so the patched tree is still a valid ESP32
-build. Patches 0007-0008 are unguarded but behaviour-neutral on every toolchain
-(a whitespace fix and an explicit cast that C++ would otherwise make implicitly).
+build. Patches 0007-0011 are unguarded but behaviour-neutral on every toolchain
+(a whitespace fix, an explicit cast C++ would otherwise make implicitly, a
+`%ul` -> `%lu` format fix, and a set of allocator-pairing fixes -- buffers and
+objects that were allocated one way and released another: UB that happens to
+work on the ESP32 and glibc but corrupts the heap on the Windows CRT). The
+byte-buffer fixes (0009, 0010) settle on `malloc`/`free` -- what Zimodem uses
+everywhere else and what these sites were already half-using -- so the patched
+tree contains no `new[]`/`delete[]` at all. 0011's `IPAddress` objects have a
+constructor, so those stay `new`/`delete` (scalar, not array).
 
 ## The patches
 
@@ -36,6 +43,9 @@ build. Patches 0007-0008 are unguarded but behaviour-neutral on every toolchain
 | 0006 | `wifisshclient.ino` | `close(sock)` -> `xi_closesocket(sock)`; `fd()` returns `(int)sock` | Windows: `closesocket()`, and `libssh2_socket_t` is 64-bit `SOCKET`. `xi_closesocket` comes from `compat/xi_platform.h`. |
 | 0007 | `wificlientnode.ino` | `void WiFiClientNode:: setNoDelay` -> `WiFiClientNode::setNoDelay` (drop the stray space) | The space made `scripts/gen_unity.py` classify the out-of-line member definition as a free function and emit a file-scope prototype. Clang rejects that declaration ("out-of-line declaration of a member must be a definition"); GCC only warns under `-fpermissive`. The generator now also drops any `::`-qualified match -- this removes the trigger at the source. |
 | 0008 | `proto_ftp.ino` | `char *end = strrchr(remotepath, '/')` -> `(char *)strrchr(...)` | `FTPHost::fixPath` takes `const char *remotepath`; in C++ `strrchr(const char*)` returns `const char*`. GCC drops the const with a warning under `-fpermissive`, Clang errors. Explicit cast matches the existing `strchr((char *)vbuf, ...)` style in this file; no behaviour change. |
+| 0009 | `zcommand.ino`, `phonebook.ino` | `doDialStreamCommand()` numeric-dial shortcut: `uint8_t *vbuf = new uint8_t[...]` -> `(uint8_t *)malloc(...)` (the existing `free(vbuf)` now matches). `savePhonebook()`: `f.printf("%ul,...")` -> `"%lu,..."` | `ATD<n>` (phonebook lookup) allocated with `new[]` and freed with `free()` -- UB; harmless on ESP32/glibc but corrupts the CRT heap on Windows, so `ATD<n>` crashes the emulator while manual `ATDT"host:port"` (never hits this path) works. `%ul` = `%u` + literal `l`, which is why saved numbers read `5l,...`; benign only because `loadPhonebook()` uses `atol()`. Both behaviour-neutral on ESP32. |
+| 0010 | `wificlientnode.ino`, `phonebook.ino` | `WiFiClientNode::host`: `new char[...]` -> `(char *)malloc(...)` in both constructors, `~WiFiClientNode()` `delete host` -> `free(host)`. `PhoneBookEntry::{address,modifiers,notes}`: `new char[...]` -> `(char *)malloc(...)` (`~PhoneBookEntry()` already frees them via `freeCharArray()`/`free()`). | Same `new[]`-vs-`free()` UB class as 0009. `~WiFiClientNode()` runs on the `ATD<n>` connect-failure path (`delete c` in `doDialStreamCommand`); `~PhoneBookEntry()` on `clearPhonebook()` (`AT&F` / boot reload). Settling on `malloc`/`free` (Zimodem's idiom; pristine has no `new[]`/`delete[]`) also sidesteps a MinGW `operator delete[]` fault that `delete[] host` hit. Behaviour-neutral on ESP32. |
+| 0011 | `zimodem.ino`, `zconfigmode.ino`, `zcommand.ino` | Static-IP config: `free(...)` -> `delete ...` for the four `IPAddress *` release sites (`setNewStaticIPs()`, the config-menu `free(newaddr)`, and the two `AT+W...` rollback loops). | `ConnSettings::parseIP()` returns `new IPAddress(...)` (and the menu does bare `new IPAddress()`); freeing those with `free()` is the same UB class. Live on the X16 build -- fires when a static IP is persisted and `loadConfig()` reruns (boot, `AT&W`+reload), when one is entered in the config menu, and on the `AT+W...` failure paths. `delete` is correct on the ESP32 too; no behaviour change. |
 
 Deliberately **not** carried from the old hand-patched tree: a
 `zcommand.ino` change from `checkPhonebookEntry(colon+1)` to
